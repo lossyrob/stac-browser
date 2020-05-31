@@ -1,0 +1,7 @@
+[Settings]
+  ID = "stac-browser"
+
+[build]
+  base    = "."
+  publish = "dist"
+  command = "CATALOG_URL=https://1tqdbvsut9.execute-api.us-west-2.amazonaws.com/v0/ npm run build"
