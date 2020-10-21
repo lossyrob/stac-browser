@@ -1,7 +1,6 @@
 import Ajv from "ajv";
 
-const STAC_PROXY_URL =
-  process.env.STAC_PROXY_URL;
+import { TILE_SOURCE_TEMPLATE, STAC_PROXY_URL } from './config';
 
 export async function fetchUri(uri) {
   // If we are proxying a STAC Catalog, replace any URI with the proxied address.
@@ -12,10 +11,10 @@ export async function fetchUri(uri) {
   return fetch(proxiedUri);
 };
 
-const modifyLoadSchemaUri = function(baseUrl, uri) {
-  if(uri.includes("://")) { return uri; } // Absolute URI
+const modifyLoadSchemaUri = function (baseUrl, uri) {
+  if (uri.includes("://")) { return uri; } // Absolute URI
 
-  if(uri.includes("/")) {
+  if (uri.includes("/")) {
     // Relative path, e.g. collection to catalog.
     return `${baseUrl}/${uri}`;
   }
@@ -24,13 +23,13 @@ const modifyLoadSchemaUri = function(baseUrl, uri) {
   return `${baseUrl}/item-spec/json-schema/${uri}`;
 };
 
-const fixUpSchema = function(schema, schemaUri) {
+const fixUpSchema = function (schema, schemaUri) {
   // Make $id unique, otherwise AjV will complain
   // Taken from https://github.com/m-mohr/stac-node-validator/blob/master/index.js#L118 (79d3461)
   schema.$id = schemaUri + '#';
 
   // Fix old schemas that have 'id' instead of '$id'
-  if("id" in schema) {
+  if ("id" in schema) {
     delete schema.id;
   }
 
@@ -43,11 +42,11 @@ export async function fetchSchemaValidator(stacObjectType, stacVersion) {
   let baseUrl = stacVersion === '1.0.0-beta.1' ? (
     `https://raw.githubusercontent.com/radiantearth/stac-spec/dev`
   ) : (
-    `https://raw.githubusercontent.com/radiantearth/stac-spec/v${stacVersion}`
-  );
+      `https://raw.githubusercontent.com/radiantearth/stac-spec/v${stacVersion}`
+    );
 
-  let schemaUrl = ( `${baseUrl}/${stacObjectType}-spec` +
-                   `/json-schema/${stacObjectType}.json`);
+  let schemaUrl = (`${baseUrl}/${stacObjectType}-spec` +
+    `/json-schema/${stacObjectType}.json`);
 
   const rsp = await fetchUri(schemaUrl);
   if (!rsp.ok) {
@@ -56,12 +55,12 @@ export async function fetchSchemaValidator(stacObjectType, stacVersion) {
 
   const schema = fixUpSchema(await rsp.json(), schemaUrl);
 
-  const loadSchema = async function(uri) {
+  const loadSchema = async function (uri) {
     let uriToFetch = modifyLoadSchemaUri(baseUrl, uri);
 
     // Fetching the $schema from json-schema.org was causing a recursive loop;
     // avoid fetching.
-    if(uriToFetch.includes("http://json-schema.org/")) {
+    if (uriToFetch.includes("http://json-schema.org/")) {
       return {};
     };
 
@@ -83,3 +82,13 @@ export async function fetchSchemaValidator(stacObjectType, stacVersion) {
 
   return ajv.compileAsync(schema);
 };
+
+export const getTileSource = (assetHref) => {
+  // If we are proxying a STAC Catalog, replace any URI with the proxied address.
+  // STAC_PROXY_URL has the form https://thingtoproxy.com|http://proxy:111
+  const proxiedUri = !!STAC_PROXY_URL ? (
+    assetHref.replace(STAC_PROXY_URL.split('|')[0], STAC_PROXY_URL.split('|')[1])
+  ) : assetHref;
+  const encodedHref = encodeURIComponent(proxiedUri);
+  return TILE_SOURCE_TEMPLATE.replace("{ASSET_HREF}", encodedHref);
+}
